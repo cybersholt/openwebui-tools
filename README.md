@@ -32,8 +32,10 @@ The following configuration values can be set under the `Valve` class:
 - Ask about upcoming events using the command `What are the upcoming events?`.
   - For the events, the start time, summary and creator email are fetched
 - Ask about noteworthy or actionable emails with the command `Are there any noteworthy or actionable emails?`.
-  - For the emails, the sender, subject, date and snippet are fetched together with a flag whether the email is unread. 
+  - For the emails, the sender, subject, date and snippet are fetched together with a flag whether the email is unread.
+- Ask for email content `Get the content of email <email ID>`. Email ID can be found in the email list.
 - Ask to create a reply to an email or just create a new email draft with the command `Create a reply to email` or `Create a new email draft`.
+- Ask the model to create a draft email with the command `Create an email draft with a party invitation`.
 **Note:** When running the query for the first time, you'll be prompted to authenticate and authorize the application to access your Google account through a Google OAuth dialog.
 
 ## License

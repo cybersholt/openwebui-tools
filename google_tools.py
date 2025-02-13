@@ -62,7 +62,7 @@ git_url: https://github.com/Shmarkus/openwebui-tools.git
 description: This tool provides functionalities to interact with Google Calendar and Gmail using the Google API. It allows you to fetch upcoming events from your calendar and retrieve emails from your inbox, create draft messages, and more.
 required_open_webui_version: 0.5.7
 requirements: google-api-python-client, google-auth-httplib2, google-auth-oauthlib, requests, email
-version: 0.0.2-SNAPSHOT
+version: 0.0.2
 licence: MIT
 """
 
