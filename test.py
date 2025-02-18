@@ -3,6 +3,7 @@ import argparse
 
 from google_tools import Tools
 
+
 def main():
     parser = argparse.ArgumentParser(description="Google Tools CLI")
     parser.add_argument('--get_calendar_events', action='store_true', help='List all calendar events with default values')
@@ -42,6 +43,7 @@ def main():
                 break
             else:
                 print("Invalid choice. Please try again.")
+
 
 if __name__ == "__main__":
     main()

@@ -2,7 +2,6 @@ import os
 import base64
 import logging
 import html
-import json
 
 from email.message import EmailMessage
 
@@ -66,6 +65,7 @@ requirements: google-api-python-client, google-auth-httplib2, google-auth-oauthl
 version: 0.0.2
 licence: MIT
 """
+
 
 def setup_logger():
     name = "GoogleTools"
@@ -349,12 +349,12 @@ def get_current_time():
     return datetime.utcnow().isoformat() + "Z"
 
 
-def get_cal_evts(service, calendarId, number_of_events, from_time) -> list:
+def get_cal_evts(service, calendar_id, number_of_events, from_time) -> list:
     out = []
     events_result = (
         service.events()
         .list(
-            calendarId=calendarId,
+            calendarId=calendar_id,
             timeMin=from_time,
             maxResults=number_of_events,
             singleEvents=True,
@@ -364,26 +364,10 @@ def get_cal_evts(service, calendarId, number_of_events, from_time) -> list:
     )
     events = events_result.get("items", [])
     for event in events:
-        # print event as JSON
-        # print(json.dumps(event, indent=4))
-        if event["organizer"].get("displayName") == None:
-            calendar = "mine"
-        else:
-            if "veikon" in event["organizer"]["displayName"].lower():
-                continue
-                calendar = "Veikko"
-            else:
-                if "kristan" in event["organizer"]["displayName"].lower():
-                    continue
-                    calendar = "Krista"
-                else:
-                    calendar = "Good to know events"
-
         out.append({
             "start": event["start"].get("dateTime", event["start"].get("date")),
             "summary": event["summary"],
-            #"creator": event["creator"]["email"], # I don't actually need this
-            "calendar": calendar # This tells me whose calendar it is
+            "calendar": event["organizer"]["displayName"]
         })
 
     return out
