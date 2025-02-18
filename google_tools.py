@@ -54,6 +54,25 @@ CALENDAR_FORMAT = """
 </event>
 """
 
+
+def setup_logger():
+    name = "GoogleTools"
+    log = logging.getLogger(name)
+    if not log.handlers:
+        log.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler()
+        handler.set_name(name)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        log.addHandler(handler)
+        log.propagate = False
+    return log
+
+
+logger = setup_logger()
+
 """
 title: Google Tools
 author: Markus Karileet
@@ -62,28 +81,9 @@ git_url: https://github.com/Shmarkus/openwebui-tools.git
 description: This tool provides functionalities to interact with Google Calendar and Gmail using the Google API. It allows you to fetch upcoming events from your calendar and retrieve emails from your inbox, create draft messages, and more.
 required_open_webui_version: 0.5.7
 requirements: google-api-python-client, google-auth-httplib2, google-auth-oauthlib, requests, email
-version: 0.0.2
+version: 0.0.3
 licence: MIT
 """
-
-
-def setup_logger():
-    name = "GoogleTools"
-    logger = logging.getLogger(name)
-    if not logger.handlers:
-        logger.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler()
-        handler.set_name(name)
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.propagate = False
-    return logger
-
-
-logger = setup_logger()
 
 
 class Tools:
@@ -94,7 +94,7 @@ class Tools:
 
     class Valves(BaseModel):
         default_calendar_entries: int = Field(
-                default=10, description="The default number of calendar entries to fetch"
+            default=10, description="The default number of calendar entries to fetch"
         )
         default_email_entries: int = Field(
             default=10, description="The default number of email entries to fetch"
@@ -104,7 +104,7 @@ class Tools:
         )
         pass
 
-    def get_user_emails(self, count: int = -1, label_id: str = "INBOX") -> str:
+    async def get_user_emails(self, count: int = -1, label_id: str = "INBOX", __event_emitter__=None) -> str:
         """
         Retrieves and displays the latest emails from the user's Gmail inbox. Always return message ID to the user so
         that the message content can be later accessed separately.
@@ -133,15 +133,22 @@ class Tools:
             settings.
         :param label_id: The label of the emails to fetch, Can be one of UNREAD, INBOX (this is the default), STARRED,
             IMPORTANT, SENT.
+        :param __event_emitter__: The event emitter function to send status updates to the frontend.
 
         :return: An XML-formatted string containing the email details or an error message.
         """
         if count == -1:
             count = self.valves.default_email_entries
-        creds = self.get_google_creds()
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Fetching user emails...", "done": False},
+            }
+        )
         description = f"The requested  {count} emails from the user's inbox that have the label {label_id}. Today is {get_current_time()}"
         logger.debug(description)
         try:
+            creds = self.get_google_creds()
             service = build("gmail", "v1", credentials=creds)
             results = service.users().messages().list(
                 userId="me",
@@ -173,9 +180,15 @@ class Tools:
 
         result = MAIN_FORMAT.format(description=description, output=f"<emails>{out}</emails>")
         logger.debug(result)
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Fetched user emails!", "done": True},
+            }
+        )
         return result
 
-    def get_email_content(self, message_id: str) -> str:
+    async def get_email_content(self, message_id: str, __event_emitter__=None) -> str:
         """
         Retrieves and returns the full body content of an email from the user's inbox for the user to READ in the
         following XML format:
@@ -188,16 +201,23 @@ class Tools:
         of the email.
 
         :param message_id: The unique message ID of the email to fetch from the inbox (eg. 194d1f624c165d4b)
+        :param __event_emitter__: The event emitter function to send status updates to the frontend.
 
         :return: An XML-formatted string containing the email body content or an error message.
 
         :raises HttpError: If there's a problem fetching the email or its body content,
             such as network errors, rate limits exceeded, or invalid credentials.
         """
-        creds = self.get_google_creds()
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Fetching email content...", "done": False},
+            }
+        )
         description = f"Contents of the email message for message_id: {message_id}. Today is {get_current_time()}"
         logger.debug(description)
         try:
+            creds = self.get_google_creds()
             service = build("gmail", "v1", credentials=creds)
             mail = service.users().messages().get(userId="me", id=message_id).execute()
             email_body = parse_email_body(mail["payload"])
@@ -207,9 +227,15 @@ class Tools:
 
         result = MAIN_FORMAT.format(description=description, output=f"<![CDATA[{email_body}]]>")
         logger.debug(result)
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Fetched email content!", "done": True},
+            }
+        )
         return result
 
-    def gmail_create_draft(self, to: str, subject: str, body: str) -> str:
+    async def gmail_create_draft(self, to: str, subject: str, body: str, __event_emitter__=None) -> str:
         """
         Creates a new draft message in the user's Gmail account using the provided recipient,
         subject, and body content.
@@ -222,26 +248,30 @@ class Tools:
         :param to: The email address of the recipient.
         :param subject: The subject line for the email.
         :param body: The main content or body of the email message.
+        :param __event_emitter__: The event emitter function to send status updates to the frontend.
 
         :return: A confirmation message indicating that the draft was created successfully,
                 or an error message if there's a problem creating the draft.
         """
         logger.debug("Creating draft message...")
-        creds = self.get_google_creds()
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Creating email draft...", "done": False},
+            }
+        )
         try:
+            creds = self.get_google_creds()
             service = build("gmail", "v1", credentials=creds)
             message = EmailMessage()
             message.set_content(body)
 
             message["To"] = to
-            # message["From"] = ""
             message["Subject"] = subject
 
-            # encoded message
             encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
             create_message = {"message": {"raw": encoded_message}}
-            # pylint: disable=E1101
             draft = (
                 service.users()
                 .drafts()
@@ -255,9 +285,15 @@ class Tools:
             out = f"An error occurred: {error}"
 
         logger.debug(out)
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Email draft created!", "done": True},
+            }
+        )
         return out
 
-    def get_user_events(self, count: int = -1) -> str:
+    async def get_user_events(self, count: int = -1, __event_emitter__=None) -> str:
         """
         Retrieves and displays upcoming events from the user's Google Calendar.
 
@@ -280,16 +316,23 @@ class Tools:
 
         :param count: The number of upcoming events to fetch from the calendar.
             If set to -1 (default), it uses the default value configured in the tool settings.
+        :param __event_emitter__: The event emitter function to send status updates to the frontend.
 
         :return: Upcoming events as a formatted string, or an error message if fetching fails.
         """
         if count == -1:
             count = self.valves.default_calendar_entries
-        creds = self.get_google_creds()
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Fetching user calendar entries...", "done": False},
+            }
+        )
         description = f"The requested {count} upcoming events from the user's calendar. Today is {get_current_time()}"
         logger.debug(description)
 
         try:
+            creds = self.get_google_creds()
             service = build("calendar", "v3", credentials=creds)
             from_time = get_current_time()
             out = ""
@@ -307,30 +350,39 @@ class Tools:
 
         results = MAIN_FORMAT.format(description=description, output=f"<events>{out}</events>")
         logger.debug(results)
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {"description": "Fetched user calendar entries!", "done": True},
+            }
+        )
         return results
 
-    def get_google_creds(self):
+    def get_google_creds(self, retry: bool = True) -> Credentials:
         creds = None
         # The file token.json stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
 
-        # If necessary, uncomment the following line to remove generated token.json on re-authenticate
-        # os.remove("token.json")
-        if os.path.exists("token.json"):
-            creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-            # If there are no (valid) credentials available, let the user log in.
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    self.valves.path_to_credentials, SCOPES
-                )
-                creds = flow.run_local_server(port=0)
-            # Save the credentials for the next run
-            with open("token.json", "w") as token:
-                token.write(creds.to_json())
+        try:
+            if os.path.exists("token.json"):
+                creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                else:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        self.valves.path_to_credentials, SCOPES
+                    )
+                    creds = flow.run_local_server(port=0)
+                with open("token.json", "w") as token:
+                    token.write(creds.to_json())
+        except Exception as error:
+            logger.error(f"Error getting credentials: {error}")
+            if retry:
+                logger.info(f"Retrying to get credentials")
+                os.remove("token.json")
+                return self.get_google_creds(retry=False)
         return creds
 
 
@@ -363,11 +415,48 @@ def get_cal_evts(service, calendar_id, number_of_events, from_time) -> list:
         .execute()
     )
     events = events_result.get("items", [])
+    # The event is in the following format:
+    # {
+    #   "kind": "calendar#event",
+    #   "etag": 3434958469520000,
+    #   "id": "aaaiagv1k2dv67f5rsa9vr78e5_20250604",
+    #   "status": "confirmed",
+    #   "htmlLink": "https://www.google.com/calendar/event?eid=aaaaWFndjFrMmR2NjdmNXJzYTl2cjc4ZTVfMjAyNTA2MDQgaG5ub2V2bzRsZjEyNWN2cXF1ZDFubm9ndDBAZw",
+    #   "created": "2021-06-01T06:16:57.000Z",
+    #   "updated": "2024-06-04T05:33:54.760Z",
+    #   "summary": "🇪🇪 Eesti lipu päev",
+    #   "creator": {
+    #     "email": "you@gmail.com"
+    #   },
+    #   "organizer": {
+    #     "email": "aaaoevo4lf125cvqqud1nnogt0@group.calendar.google.com",
+    #     "displayName": "Lipupäevad",
+    #     "self": true
+    #   },
+    #   "start": {
+    #     "date": "2025-06-04"
+    #   },
+    #   "end": {
+    #     "date": "2025-06-05"
+    #   },
+    #   "recurringEventId": "aaaiagv1k2dv67f5rsa9vr78e5",
+    #   "originalStartTime": {
+    #     "date": "2025-06-04"
+    #   },
+    #   "transparency": "transparent",
+    #   "iCalUID": "aaaiagv1k2dv67f5rsa9vr78e5@google.com",
+    #   "sequence": 1,
+    #   "reminders": {
+    #     "useDefault": false
+    #   },
+    #   "eventType": "default"
+    # }
     for event in events:
         out.append({
             "start": event["start"].get("dateTime", event["start"].get("date")),
             "summary": event["summary"],
-            "calendar": event["organizer"]["displayName"]
+            # if the organizer displayName is None, then use the email
+            "calendar": event["organizer"].get("displayName", event["organizer"]["email"])
         })
 
     return out
