@@ -22,7 +22,7 @@ SCOPES = [
     # Read all resources and their metadata—no write operations.
     "https://www.googleapis.com/auth/gmail.readonly",
     # Create, read, update, and delete drafts. Send messages and drafts.
-    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/gmail.compose"
 ]
 
 MAIN_FORMAT = """
@@ -101,14 +101,11 @@ class Tools:
             default=10, description="The default number of email entries to fetch"
         )
         path_to_credentials: str = Field(
-            default="credentials.json",
-            description="The absolute path to the credentials file",
+            default="credentials.json", description="The absolute path to the credentials file"
         )
         pass
 
-    async def get_user_emails(
-        self, count: int = -1, label_id: str = "INBOX", __event_emitter__=None
-    ) -> str:
+    async def get_user_emails(self, count: int = -1, label_id: str = "INBOX", __event_emitter__=None) -> str:
         """
         Retrieves and displays the latest emails from the user's Gmail inbox. Always return message ID to the user so
         that the message content can be later accessed separately.
@@ -154,29 +151,19 @@ class Tools:
         try:
             creds = self.get_google_creds()
             service = build("gmail", "v1", credentials=creds)
-            results = (
-                service.users()
-                .messages()
-                .list(
-                    userId="me",
-                    maxResults=count,
-                    includeSpamTrash=False,
-                    labelIds=[label_id],
-                )
-                .execute()
-            )
+            results = service.users().messages().list(
+                userId="me",
+                maxResults=count,
+                includeSpamTrash=False,
+                labelIds=[label_id]
+            ).execute()
             messages = results.get("messages", [])
             out = ""
             if not messages:
                 out = "No messages found."
             else:
                 for msg in messages:
-                    mail = (
-                        service.users()
-                        .messages()
-                        .get(userId="me", id=msg["id"])
-                        .execute()
-                    )
+                    mail = service.users().messages().get(userId="me", id=msg["id"]).execute()
                     email_body = parse_email_body(mail["payload"])
 
                     out += MAIL_FORMAT.format(
@@ -186,15 +173,13 @@ class Tools:
                         snippet=mail["snippet"],
                         unread="UNREAD" in mail["labelIds"],
                         id=msg["id"],
-                        email_body=email_body,
+                        email_body=email_body
                     )
 
         except HttpError as error:
             out = f"An error occurred: {error}"
 
-        result = MAIN_FORMAT.format(
-            description=description, output=f"<emails>{out}</emails>"
-        )
+        result = MAIN_FORMAT.format(description=description, output=f"<emails>{out}</emails>")
         logger.debug(result)
         await __event_emitter__(
             {
@@ -241,9 +226,7 @@ class Tools:
         except HttpError as error:
             email_body = f"An error occurred: {error}"
 
-        result = MAIN_FORMAT.format(
-            description=description, output=f"<![CDATA[{email_body}]]>"
-        )
+        result = MAIN_FORMAT.format(description=description, output=f"<![CDATA[{email_body}]]>")
         logger.debug(result)
         await __event_emitter__(
             {
@@ -253,9 +236,7 @@ class Tools:
         )
         return result
 
-    async def gmail_create_draft(
-        self, to: str, subject: str, body: str, __event_emitter__=None
-    ) -> str:
+    async def gmail_create_draft(self, to: str, subject: str, body: str, __event_emitter__=None) -> str:
         """
         Creates a new draft message in the user's Gmail account using the provided recipient,
         subject, and body content.
@@ -340,23 +321,15 @@ class Tools:
 
         :return: Upcoming events as a formatted string, or an error message if fetching fails.
         """
-        try:
-            count = int(count)
-        except (ValueError, TypeError):
+        if count == -1:
             count = self.valves.default_calendar_entries
-        if count < 1:
-            count = self.valves.default_calendar_entries
-
         await __event_emitter__(
             {
                 "type": "status",
-                "data": {
-                    "description": "Fetching user calendar entries...",
-                    "done": False,
-                },
+                "data": {"description": "Fetching user calendar entries...", "done": False},
             }
         )
-        description = f"Fetching {count} upcoming events as of {get_current_time()}"
+        description = f"The requested {count} upcoming events from the user's calendar. Today is {get_current_time()}"
         logger.debug(description)
 
         try:
@@ -370,21 +343,13 @@ class Tools:
                 events = get_cal_evts(service, calendar_id, count, from_time)
                 event_list += events
             event_list.sort(key=lambda x: x["start"])
-            for i, event in enumerate(event_list):
-                if i >= count:
-                    break
-                out += CALENDAR_FORMAT.format(
-                    start=event["start"],
-                    summary=event["summary"],
-                    calendar=event["calendar"],
-                )
+            for i in range(count):
+                out += CALENDAR_FORMAT.format(start=event_list[i]["start"], summary=event_list[i]["summary"], calendar=event_list[i]["calendar"])
 
         except HttpError as error:
             out = f"Error fetching calendar data: {str(error)}"
 
-        results = MAIN_FORMAT.format(
-            description=description, output=f"<events>{out}</events>"
-        )
+        results = MAIN_FORMAT.format(description=description, output=f"<events>{out}</events>")
         logger.debug(results)
         await __event_emitter__(
             {
@@ -424,7 +389,7 @@ class Tools:
 
 def get_calendar_ids(service) -> list:
     out = []
-    calendars = service.calendarList().list().execute()
+    calendars = (service.calendarList().list().execute())
     cals = calendars.get("items", [])
     for cal in cals:
         out.append(cal["id"])
@@ -488,16 +453,12 @@ def get_cal_evts(service, calendar_id, number_of_events, from_time) -> list:
     #   "eventType": "default"
     # }
     for event in events:
-        out.append(
-            {
-                "start": event["start"].get("dateTime", event["start"].get("date")),
-                "summary": event["summary"],
-                # if the organizer displayName is None, then use the email
-                "calendar": event["organizer"].get(
-                    "displayName", event["organizer"]["email"]
-                ),
-            }
-        )
+        out.append({
+            "start": event["start"].get("dateTime", event["start"].get("date")),
+            "summary": event["summary"],
+            # if the organizer displayName is None, then use the email
+            "calendar": event["organizer"].get("displayName", event["organizer"]["email"])
+        })
 
     return out
 
@@ -509,10 +470,7 @@ def get_header_value(payload: list, name: str) -> str:
 
 def parse_email_body(payload: dict) -> str:
     try:
-        if (
-            payload["mimeType"] == "multipart/alternative"
-            or payload["mimeType"] == "multipart/mixed"
-        ):
+        if payload["mimeType"] == "multipart/alternative" or payload["mimeType"] == "multipart/mixed":
             for part in payload["parts"]:
                 if part["mimeType"] == "text/html" or part["mimeType"] == "text/plain":
                     return decode_mail_body(part["body"]["data"])
@@ -527,4 +485,4 @@ def parse_email_body(payload: dict) -> str:
 
 
 def decode_mail_body(data: str) -> str:
-    return html.escape(base64.b64decode(data).decode("utf-8", errors="replace"))
+    return html.escape(base64.b64decode(data).decode("utf-8", errors='replace'))
